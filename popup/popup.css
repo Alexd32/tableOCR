@@ -1,0 +1,46 @@
+:root {
+  --w: 360px;
+  --h: 520px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  width: var(--w);
+  height: var(--h);
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #0f1115;
+  color: #ffffff;
+}
+
+.app {
+  height: 100%;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.header {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.btn {
+  border: 0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.btn_primary {
+  background: #2b6cff;
+  color: #fff;
+}
+
+.btn_primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
