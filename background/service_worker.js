@@ -21,8 +21,8 @@
     }
 
     if (msg.type === 'SELECTION_CANCELLED') {
-      sendResponse({ ok: true });
-      return;
+      handle_selection_cancelled(sender).then(() => sendResponse({ ok: true }));
+      return true;
     }
 
     if (msg.type === 'CLEAR_SESSION_PREVIEW') {
@@ -53,11 +53,19 @@
     }
 
     try {
+      // CSS достаточно в top frame
       await chrome.scripting.insertCSS({
         target: { tabId: tab.id },
         files: ['content/overlay.css']
       });
 
+      // ВАЖНО: ловим Esc во всех iframe
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id, allFrames: true },
+        files: ['content/esc_listener.js']
+      });
+
+      // Оверлей рисуем только в top (overlay.js сам защищён от дублей)
       await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         files: ['content/overlay.js']
@@ -70,21 +78,35 @@
     }
   }
 
+  async function handle_selection_cancelled(sender) {
+    // сообщение может прийти:
+    // - из content script (sender.tab есть)
+    // - из side panel (sender.tab нет)
+    let tab_id = sender && sender.tab ? sender.tab.id : null;
+
+    if (!tab_id) {
+      const tab = await get_active_tab();
+      tab_id = tab && tab.id ? tab.id : null;
+    }
+
+    if (!tab_id) return;
+
+    // просим top-frame убрать оверлей (даже если Esc пришёл из iframe или из side panel)
+    try {
+      await chrome.tabs.sendMessage(tab_id, { type: 'FORCE_OVERLAY_CLEANUP' }, { frameId: 0 });
+    } catch (_) {}
+  }
+
   async function handle_selection_finished(sender, rect) {
     try {
-      // Снимаем видимую область вкладки
       const data_url_full = await chrome.tabs.captureVisibleTab(null, { format: 'png' });
-
-      // Режем по rect
       const cropped_data_url = await crop_data_url(data_url_full, rect);
 
-      // ВАЖНО: сохраняем в session, чтобы панель смогла подхватить даже если пропустила message
       await chrome.storage.session.set({
         preview_type: 'image',
         preview_data_url: cropped_data_url
       });
 
-      // Шлём в UI
       chrome.runtime.sendMessage({
         type: 'PREVIEW_READY',
         preview_type: 'image',
@@ -115,7 +137,6 @@
     const sw = Math.max(1, Math.floor(rect.w * dpr));
     const sh = Math.max(1, Math.floor(rect.h * dpr));
 
-    // ограничение HD
     const max_w = 1280;
     const max_h = 720;
 

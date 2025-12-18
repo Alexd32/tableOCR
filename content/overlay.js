@@ -12,10 +12,11 @@
   let is_selecting = false;
   let start_x = 0, start_y = 0;
 
+  let is_cleaning_up = false;
+
   begin();
 
   function begin() {
-    // блокируем скролл
     document.documentElement.dataset.tableOcrOldOverflow = document.documentElement.style.overflow || '';
     document.body.dataset.tableOcrOldOverflow = document.body.style.overflow || '';
     document.documentElement.style.overflow = 'hidden';
@@ -29,7 +30,11 @@
     hint.textContent = 'Select area with mouse. Press Esc to cancel.';
     overlay.appendChild(hint);
 
-    m_top = mk_mask(); m_left = mk_mask(); m_right = mk_mask(); m_bottom = mk_mask();
+    m_top = mk_mask();
+    m_left = mk_mask();
+    m_right = mk_mask();
+    m_bottom = mk_mask();
+
     overlay.appendChild(m_top);
     overlay.appendChild(m_left);
     overlay.appendChild(m_right);
@@ -41,13 +46,21 @@
 
     document.documentElement.appendChild(overlay);
 
-    overlay.addEventListener('mousedown', on_down);
+    overlay.addEventListener('mousedown', on_down, true);
     window.addEventListener('mousemove', on_move, true);
     window.addEventListener('mouseup', on_up, true);
-    window.addEventListener('keydown', on_key, true);
 
-    // по умолчанию “дырка” нулевая → всё затемнено
+    document.addEventListener('keydown', on_key, true);
+
+    // слушаем принудительную команду очистки (например Esc был в iframe)
+    chrome.runtime.onMessage.addListener(on_runtime_message);
+
     update_rect(0, 0, 0, 0);
+  }
+
+  function on_runtime_message(msg) {
+    if (!msg || msg.type !== 'FORCE_OVERLAY_CLEANUP') return;
+    cleanup();
   }
 
   function mk_mask() {
@@ -59,6 +72,7 @@
   function on_down(e) {
     if (e.button !== 0) return;
     e.preventDefault();
+    e.stopPropagation();
 
     is_selecting = true;
     start_x = e.clientX;
@@ -81,9 +95,12 @@
     update_rect(left, top, width, height);
   }
 
-  function on_up() {
+  function on_up(e) {
     if (!is_selecting) return;
     is_selecting = false;
+
+    e.preventDefault();
+    e.stopPropagation();
 
     const rect = selection.getBoundingClientRect();
     if (rect.width < 8 || rect.height < 8) {
@@ -107,11 +124,13 @@
   function on_key(e) {
     if (e.key === 'Escape') {
       e.preventDefault();
+      e.stopPropagation();
       cancel();
     }
   }
 
   function cancel() {
+    if (is_cleaning_up) return;
     chrome.runtime.sendMessage({ type: 'SELECTION_CANCELLED' }, () => cleanup());
   }
 
@@ -146,28 +165,38 @@
   }
 
   function cleanup() {
-    if (overlay) {
-      overlay.removeEventListener('mousedown', on_down);
-      overlay.remove();
-    }
+    if (is_cleaning_up) return;
+    is_cleaning_up = true;
 
-    window.removeEventListener('mousemove', on_move, true);
-    window.removeEventListener('mouseup', on_up, true);
-    window.removeEventListener('keydown', on_key, true);
+    try {
+      chrome.runtime.onMessage.removeListener(on_runtime_message);
+    } catch (_) {}
+
+    try {
+      if (overlay) {
+        overlay.removeEventListener('mousedown', on_down, true);
+        overlay.remove();
+      }
+
+      window.removeEventListener('mousemove', on_move, true);
+      window.removeEventListener('mouseup', on_up, true);
+      document.removeEventListener('keydown', on_key, true);
+    } catch (_) {}
 
     overlay = null;
     selection = null;
     hint = null;
     m_top = m_left = m_right = m_bottom = null;
 
-    // вернуть скролл
-    if (document.documentElement.dataset.tableOcrOldOverflow !== undefined) {
-      document.documentElement.style.overflow = document.documentElement.dataset.tableOcrOldOverflow;
-      delete document.documentElement.dataset.tableOcrOldOverflow;
-    }
-    if (document.body.dataset.tableOcrOldOverflow !== undefined) {
-      document.body.style.overflow = document.body.dataset.tableOcrOldOverflow;
-      delete document.body.dataset.tableOcrOldOverflow;
-    }
+    try {
+      if (document.documentElement.dataset.tableOcrOldOverflow !== undefined) {
+        document.documentElement.style.overflow = document.documentElement.dataset.tableOcrOldOverflow;
+        delete document.documentElement.dataset.tableOcrOldOverflow;
+      }
+      if (document.body.dataset.tableOcrOldOverflow !== undefined) {
+        document.body.style.overflow = document.body.dataset.tableOcrOldOverflow;
+        delete document.body.dataset.tableOcrOldOverflow;
+      }
+    } catch (_) {}
   }
 })();

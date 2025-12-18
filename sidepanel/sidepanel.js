@@ -13,7 +13,8 @@
   const btn_select  = document.getElementById('btn_select');
   const extract_block = document.getElementById('extract_block');
   const btn_extract = document.getElementById('btn_extract');
-  const btn_clear   = document.getElementById('btn_clear');
+
+  const btn_clear = document.getElementById('btn_clear');
 
   const error_box = document.getElementById('error');
 
@@ -23,14 +24,18 @@
     preview_url: null   // dataURL (from capture) or blobURL (from file)
   };
 
+  // важно: флаг режима выбора области (чтобы ESC в Side Panel отменял overlay)
+  let selection_in_progress = false;
+
   init();
 
   async function init() {
     clear_error();
     bind_ui();
     bind_runtime();
+    bind_sidepanel_esc();
 
-    // подтягиваем превью после выбора области (если есть)
+    // подтягиваем session preview после выбора области
     try {
       const session = await chrome.storage.session.get(['preview_type', 'preview_data_url']);
       if (session && session.preview_type === 'image' && session.preview_data_url) {
@@ -79,13 +84,17 @@
 
       try {
         await clear_session_preview();
-        reset_to_initial_state_local(); // чтобы сразу вернуть UI в исходное перед выбором
+        reset_to_initial_state_local(); // сразу вернуть исходное перед выделением
+
+        selection_in_progress = true;
 
         const res = await chrome.runtime.sendMessage({ type: 'START_SELECTION' });
         if (!res || !res.ok) {
+          selection_in_progress = false;
           show_error(res && res.error ? res.error : 'Cannot start selection');
         }
       } catch (e) {
+        selection_in_progress = false;
         show_error('Cannot start selection');
       } finally {
         btn_select.disabled = false;
@@ -96,7 +105,6 @@
       console.log('[sidepanel] Start Extract (TODO: send to API)');
     });
 
-    // CLEAR: полный reset в исходное состояние
     btn_clear.addEventListener('click', async () => {
       clear_error();
       btn_clear.disabled = true;
@@ -115,6 +123,8 @@
       if (!msg || !msg.type) return;
 
       if (msg.type === 'PREVIEW_READY') {
+        selection_in_progress = false;
+
         if (msg.preview_type === 'image' && msg.preview_data_url) {
           set_image_preview(msg.preview_data_url);
           render();
@@ -123,10 +133,34 @@
       }
 
       if (msg.type === 'SELECTION_FAILED') {
+        selection_in_progress = false;
         show_error(msg.error || 'Selection failed');
         return;
       }
+
+      // если в будущем решишь слать явное событие отмены — поддержим
+      if (msg.type === 'SELECTION_CANCELLED') {
+        selection_in_progress = false;
+        return;
+      }
     });
+  }
+
+  // Ловим ESC в Side Panel: если идёт выбор области — отменяем overlay
+  function bind_sidepanel_esc() {
+    document.addEventListener('keydown', async (e) => {
+      if (e.key !== 'Escape') return;
+      if (!selection_in_progress) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      selection_in_progress = false;
+
+      try {
+        await chrome.runtime.sendMessage({ type: 'SELECTION_CANCELLED' });
+      } catch (_) {}
+    }, true);
   }
 
   function handle_files(file_list) {
@@ -187,10 +221,7 @@
     state.preview_type = null;
     state.preview_url = null;
 
-    // очистить <input type=file> чтобы можно было выбрать тот же файл снова
     file_input.value = '';
-
-    // очистить src у картинки (чтобы не мигало на старом)
     preview_img.removeAttribute('src');
 
     clear_error();
@@ -208,14 +239,18 @@
   }
 
   function render() {
+    // кнопки
     if (state.has_preview) {
       btn_select.classList.add('hidden');
       extract_block.classList.remove('hidden');
+      btn_clear.classList.remove('hidden');
     } else {
       btn_select.classList.remove('hidden');
       extract_block.classList.add('hidden');
+      btn_clear.classList.add('hidden');
     }
 
+    // превью зона
     if (!state.has_preview) {
       dz_empty.classList.remove('hidden');
       dz_preview.classList.add('hidden');
