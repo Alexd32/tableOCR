@@ -7,6 +7,16 @@
     } catch (_) {}
   });
 
+  // ключ: когда side panel закрыли крестиком — порт отключится, и мы уберём overlay
+  chrome.runtime.onConnect.addListener((port) => {
+    if (!port || port.name !== 'sidepanel') return;
+
+    port.onDisconnect.addListener(() => {
+      // панель закрыли/скрыли => чистим артефакты на активной вкладке
+      cleanup_overlay_on_active_tab().catch(() => {});
+    });
+  });
+
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (!msg || !msg.type) return;
 
@@ -53,19 +63,16 @@
     }
 
     try {
-      // CSS достаточно в top frame
       await chrome.scripting.insertCSS({
         target: { tabId: tab.id },
         files: ['content/overlay.css']
       });
 
-      // ВАЖНО: ловим Esc во всех iframe
       await chrome.scripting.executeScript({
         target: { tabId: tab.id, allFrames: true },
         files: ['content/esc_listener.js']
       });
 
-      // Оверлей рисуем только в top (overlay.js сам защищён от дублей)
       await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         files: ['content/overlay.js']
@@ -79,9 +86,6 @@
   }
 
   async function handle_selection_cancelled(sender) {
-    // сообщение может прийти:
-    // - из content script (sender.tab есть)
-    // - из side panel (sender.tab нет)
     let tab_id = sender && sender.tab ? sender.tab.id : null;
 
     if (!tab_id) {
@@ -91,9 +95,17 @@
 
     if (!tab_id) return;
 
-    // просим top-frame убрать оверлей (даже если Esc пришёл из iframe или из side panel)
     try {
       await chrome.tabs.sendMessage(tab_id, { type: 'FORCE_OVERLAY_CLEANUP' }, { frameId: 0 });
+    } catch (_) {}
+  }
+
+  async function cleanup_overlay_on_active_tab() {
+    const tab = await get_active_tab();
+    if (!tab || !tab.id) return;
+
+    try {
+      await chrome.tabs.sendMessage(tab.id, { type: 'FORCE_OVERLAY_CLEANUP' }, { frameId: 0 });
     } catch (_) {}
   }
 
