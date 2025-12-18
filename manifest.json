@@ -1,12 +1,17 @@
+
 {
   "manifest_version": 3,
   "name": "Table OCR",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "minimum_chrome_version": "109",
   "action": {
     "default_title": "Table OCR",
     "default_popup": "popup/popup.html"
   },
+  "background": {
+    "service_worker": "background/service_worker.js"
+  },
+  "permissions": ["activeTab", "scripting", "tabs", "storage"],
   "icons": {
     "16": "assets/icons/icon16.png",
     "48": "assets/icons/icon48.png",
