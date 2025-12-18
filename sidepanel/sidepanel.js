@@ -18,24 +18,30 @@
   const state = {
     has_preview: false,
     preview_type: null, // 'image' | 'pdf'
-    preview_url: null,  // dataURL (image)
-    file_ref: null      // позже можно хранить file для API
+    preview_url: null   // dataURL (from capture) or blobURL (from file)
   };
 
   init();
 
-  function init() {
+  async function init() {
     clear_error();
-    render();
     bind_ui();
     bind_runtime();
+
+    // ВАЖНО: подхватываем сохранённую миниатюру (после выделения области)
+    try {
+      const session = await chrome.storage.session.get(['preview_type', 'preview_data_url']);
+      if (session && session.preview_type === 'image' && session.preview_data_url) {
+        set_image_preview(session.preview_data_url); // dataURL
+      }
+    } catch (_) {}
+
+    render();
   }
 
   function bind_ui() {
-    // 4) dropzone click -> open file dialog
-    dropzone.addEventListener('click', () => {
-      file_input.click();
-    });
+    // dropzone click -> open file dialog
+    dropzone.addEventListener('click', () => file_input.click());
 
     dropzone.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
@@ -49,7 +55,6 @@
       handle_files(file_input.files);
     });
 
-    // drag & drop
     dropzone.addEventListener('dragover', (e) => {
       e.preventDefault();
       dropzone.classList.add('drag_over');
@@ -66,27 +71,23 @@
       handle_files(e.dataTransfer.files);
     });
 
-    // 2) start selection (overlay must appear immediately)
     btn_select.addEventListener('click', async () => {
       clear_error();
       btn_select.disabled = true;
 
       try {
-        // сбрасываем старый preview
-        clear_preview();
+        // чистим прошлый session preview (на всякий случай)
+        await chrome.runtime.sendMessage({ type: 'CLEAR_SESSION_PREVIEW' });
+
+        clear_preview_local_only();
 
         const res = await chrome.runtime.sendMessage({ type: 'START_SELECTION' });
-
         if (!res || !res.ok) {
           show_error(res && res.error ? res.error : 'Cannot start selection');
-          btn_select.disabled = false;
-          return;
         }
-
-        // overlay появится сразу, side panel остаётся открытой
-        btn_select.disabled = false;
       } catch (e) {
         show_error('Cannot start selection');
+      } finally {
         btn_select.disabled = false;
       }
     });
@@ -97,16 +98,12 @@
   }
 
   function bind_runtime() {
-    // 3) after selection -> preview arrives here
     chrome.runtime.onMessage.addListener((msg) => {
       if (!msg || !msg.type) return;
 
       if (msg.type === 'PREVIEW_READY') {
-        // msg: {preview_type, preview_data_url}
         if (msg.preview_type === 'image' && msg.preview_data_url) {
-          state.has_preview = true;
-          state.preview_type = 'image';
-          state.preview_url = msg.preview_data_url;
+          set_image_preview(msg.preview_data_url);
           render();
         }
         return;
@@ -114,7 +111,6 @@
 
       if (msg.type === 'SELECTION_FAILED') {
         show_error(msg.error || 'Selection failed');
-        btn_select.disabled = false;
         return;
       }
     });
@@ -141,40 +137,44 @@
       return;
     }
 
-    clear_preview();
+    // При загрузке файла — локальный preview, session-preview не нужен
+    chrome.runtime.sendMessage({ type: 'CLEAR_SESSION_PREVIEW' }).catch(() => {});
+    clear_preview_local_only();
 
     if (is_pdf) {
       state.has_preview = true;
       state.preview_type = 'pdf';
       state.preview_url = null;
-      state.file_ref = file;
       render();
+      file_input.value = '';
       return;
     }
 
-    // image preview
+    // image preview via blob url
     state.has_preview = true;
     state.preview_type = 'image';
-    state.preview_url = URL.createObjectURL(file); // для UI достаточно
-    state.file_ref = file;
+    state.preview_url = URL.createObjectURL(file);
     render();
+
+    file_input.value = '';
   }
 
-  function clear_preview() {
-    // revoke object url if used
-    if (state.preview_type === 'image' && state.preview_url && state.preview_url.startsWith('blob:')) {
+  function set_image_preview(data_url) {
+    // data_url = data:image/png;base64,...
+    clear_preview_local_only();
+    state.has_preview = true;
+    state.preview_type = 'image';
+    state.preview_url = data_url;
+  }
+
+  function clear_preview_local_only() {
+    // revoke blob url if used
+    if (state.preview_type === 'image' && state.preview_url && String(state.preview_url).startsWith('blob:')) {
       try { URL.revokeObjectURL(state.preview_url); } catch (_) {}
     }
-
     state.has_preview = false;
     state.preview_type = null;
     state.preview_url = null;
-    state.file_ref = null;
-
-    // чтобы повторный выбор того же файла сработал
-    file_input.value = '';
-
-    render();
   }
 
   function render() {

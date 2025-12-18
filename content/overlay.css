@@ -7,18 +7,23 @@
 
 #table_ocr_overlay * { box-sizing: border-box; }
 
+/* Маски затемнения */
 .table_ocr_mask {
   position: absolute;
   background: rgba(0, 0, 0, 0.55);
+  z-index: 10; /* ниже подсказки */
 }
 
+/* Рамка выделения */
 #table_ocr_selection {
   position: absolute;
   border: 2px solid #4c57f0;
   background: transparent;
   pointer-events: none;
+  z-index: 20; /* выше масок */
 }
 
+/* Подсказка должна быть поверх ВСЕГО и не затемняться */
 #table_ocr_selection_hint {
   position: fixed;
   top: 14px;
@@ -31,4 +36,7 @@
   font: 13px/1.2 Arial, sans-serif;
   box-shadow: 0 8px 24px rgba(0,0,0,0.35);
   border: 1px solid rgba(0,0,0,0.08);
+
+  z-index: 9999;     /* гарантированно выше масок */
+  pointer-events: none; /* чтобы не мешала выделению */
 }
