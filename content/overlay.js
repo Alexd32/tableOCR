@@ -1,7 +1,6 @@
 (() => {
   'use strict';
 
-  // если уже есть оверлей — не создаём второй
   if (document.getElementById('table_ocr_overlay')) return;
 
   let overlay = null;
@@ -13,20 +12,9 @@
   let is_selecting = false;
   let start_x = 0, start_y = 0;
 
-  // на всякий случай оставляем поддержку BEGIN_SELECTION
-  try {
-    chrome.runtime.onMessage.addListener((msg) => {
-      if (!msg || msg.type !== 'BEGIN_SELECTION') return;
-      begin();
-    });
-  } catch (_) {}
-
-  // СТАРТ СРАЗУ (главное изменение)
   begin();
 
   function begin() {
-    cleanup();
-
     // блокируем скролл
     document.documentElement.dataset.tableOcrOldOverflow = document.documentElement.style.overflow || '';
     document.body.dataset.tableOcrOldOverflow = document.body.style.overflow || '';
@@ -57,6 +45,9 @@
     window.addEventListener('mousemove', on_move, true);
     window.addEventListener('mouseup', on_up, true);
     window.addEventListener('keydown', on_key, true);
+
+    // по умолчанию “дырка” нулевая → всё затемнено
+    update_rect(0, 0, 0, 0);
   }
 
   function mk_mask() {
@@ -79,15 +70,13 @@
   function on_move(e) {
     if (!is_selecting) return;
 
-    const x1 = start_x;
-    const y1 = start_y;
     const x2 = e.clientX;
     const y2 = e.clientY;
 
-    const left = Math.min(x1, x2);
-    const top = Math.min(y1, y2);
-    const width = Math.abs(x2 - x1);
-    const height = Math.abs(y2 - y1);
+    const left = Math.min(start_x, x2);
+    const top = Math.min(start_y, y2);
+    const width = Math.abs(x2 - start_x);
+    const height = Math.abs(y2 - start_y);
 
     update_rect(left, top, width, height);
   }
@@ -97,7 +86,6 @@
     is_selecting = false;
 
     const rect = selection.getBoundingClientRect();
-
     if (rect.width < 8 || rect.height < 8) {
       cancel();
       return;
@@ -113,9 +101,7 @@
       dpr: window.devicePixelRatio || 1
     };
 
-    chrome.runtime.sendMessage({ type: 'SELECTION_FINISHED', rect: result }, () => {
-      cleanup();
-    });
+    chrome.runtime.sendMessage({ type: 'SELECTION_FINISHED', rect: result }, () => cleanup());
   }
 
   function on_key(e) {
@@ -126,9 +112,7 @@
   }
 
   function cancel() {
-    chrome.runtime.sendMessage({ type: 'SELECTION_CANCELLED' }, () => {
-      cleanup();
-    });
+    chrome.runtime.sendMessage({ type: 'SELECTION_CANCELLED' }, () => cleanup());
   }
 
   function update_rect(left, top, width, height) {
@@ -176,11 +160,12 @@
     hint = null;
     m_top = m_left = m_right = m_bottom = null;
 
-    if (document.documentElement && document.documentElement.dataset.tableOcrOldOverflow !== undefined) {
+    // вернуть скролл
+    if (document.documentElement.dataset.tableOcrOldOverflow !== undefined) {
       document.documentElement.style.overflow = document.documentElement.dataset.tableOcrOldOverflow;
       delete document.documentElement.dataset.tableOcrOldOverflow;
     }
-    if (document.body && document.body.dataset.tableOcrOldOverflow !== undefined) {
+    if (document.body.dataset.tableOcrOldOverflow !== undefined) {
       document.body.style.overflow = document.body.dataset.tableOcrOldOverflow;
       delete document.body.dataset.tableOcrOldOverflow;
     }

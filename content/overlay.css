@@ -5,9 +5,7 @@
   cursor: crosshair;
 }
 
-#table_ocr_overlay * {
-  box-sizing: border-box;
-}
+#table_ocr_overlay * { box-sizing: border-box; }
 
 .table_ocr_mask {
   position: absolute;

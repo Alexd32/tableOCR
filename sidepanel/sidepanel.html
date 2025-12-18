@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Table OCR</title>
+  <link rel="stylesheet" href="sidepanel.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="title">Table OCR</div>
+    <div class="subtitle">Extract tabular data from PDF, scanned files &amp; images.</div>
+
+    <div id="dropzone" class="dropzone" role="button" tabindex="0">
+      <input id="file_input" class="file_input" type="file" accept="image/*,application/pdf" />
+
+      <div id="dz_empty" class="dz_empty">
+        <div class="dz_icon" aria-hidden="true">📄</div>
+        <div class="dz_main">Upload Image/PDF</div>
+        <div class="dz_note">*Uploaded data is automatically deleted daily</div>
+      </div>
+
+      <div id="dz_preview" class="dz_preview hidden">
+        <img id="preview_img" class="preview_img hidden" alt="Preview" />
+        <div id="preview_pdf" class="preview_pdf hidden">
+          <div class="pdf_badge">PDF</div>
+          <div class="pdf_text">File uploaded</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="btn_select" class="btn btn_primary" type="button">Select table in window</button>
+      <button id="btn_extract" class="btn btn_primary hidden" type="button">Start Extract</button>
+    </div>
+
+    <div id="error" class="error hidden"></div>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>
