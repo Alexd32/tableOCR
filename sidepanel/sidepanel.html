@@ -11,18 +11,27 @@
     <div class="title">Table OCR</div>
     <div class="subtitle">Extract tabular data from PDF, scanned files &amp; images.</div>
 
-    <div id="dropzone" class="dropzone" role="button" tabindex="0">
+    <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-label="Upload Image/PDF">
       <input id="file_input" class="file_input" type="file" accept="image/*,application/pdf" />
 
       <div id="dz_empty" class="dz_empty">
-        <div class="dz_icon" aria-hidden="true">📄</div>
+        <div class="dz_icon" aria-hidden="true">
+          <svg width="54" height="54" viewBox="0 0 24 24" fill="none">
+            <path d="M4 5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v8" stroke="#222" stroke-width="1.6" stroke-linecap="round"/>
+            <path d="M4 16l4.5-4.5a1.5 1.5 0 0 1 2.1 0L14 15l1.2-1.2a1.5 1.5 0 0 1 2.1 0L20 16" stroke="#222" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M8.5 8.5h.01" stroke="#222" stroke-width="3" stroke-linecap="round"/>
+            <path d="M19 13v6" stroke="#222" stroke-width="1.6" stroke-linecap="round"/>
+            <path d="M16 16h6" stroke="#222" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </div>
+
         <div class="dz_main">Upload Image/PDF</div>
         <div class="dz_note">*Uploaded data is automatically deleted daily</div>
       </div>
 
       <div id="dz_preview" class="dz_preview hidden">
         <img id="preview_img" class="preview_img hidden" alt="Preview" />
-        <div id="preview_pdf" class="preview_pdf hidden">
+        <div id="preview_pdf" class="preview_pdf hidden" aria-label="PDF file">
           <div class="pdf_badge">PDF</div>
           <div class="pdf_text">File uploaded</div>
         </div>
@@ -31,7 +40,12 @@
 
     <div class="actions">
       <button id="btn_select" class="btn btn_primary" type="button">Select table in window</button>
-      <button id="btn_extract" class="btn btn_primary hidden" type="button">Start Extract</button>
+
+      <div id="extract_block" class="extract_block hidden">
+        <button id="btn_extract" class="btn btn_primary" type="button">Start Extract</button>
+
+        <button id="btn_clear" class="btn_link" type="button">Clear</button>
+      </div>
     </div>
 
     <div id="error" class="error hidden"></div>

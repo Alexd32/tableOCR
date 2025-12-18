@@ -11,7 +11,9 @@
   const preview_pdf = document.getElementById('preview_pdf');
 
   const btn_select  = document.getElementById('btn_select');
+  const extract_block = document.getElementById('extract_block');
   const btn_extract = document.getElementById('btn_extract');
+  const btn_clear   = document.getElementById('btn_clear');
 
   const error_box = document.getElementById('error');
 
@@ -28,11 +30,11 @@
     bind_ui();
     bind_runtime();
 
-    // ВАЖНО: подхватываем сохранённую миниатюру (после выделения области)
+    // подтягиваем превью после выбора области (если есть)
     try {
       const session = await chrome.storage.session.get(['preview_type', 'preview_data_url']);
       if (session && session.preview_type === 'image' && session.preview_data_url) {
-        set_image_preview(session.preview_data_url); // dataURL
+        set_image_preview(session.preview_data_url);
       }
     } catch (_) {}
 
@@ -76,10 +78,8 @@
       btn_select.disabled = true;
 
       try {
-        // чистим прошлый session preview (на всякий случай)
-        await chrome.runtime.sendMessage({ type: 'CLEAR_SESSION_PREVIEW' });
-
-        clear_preview_local_only();
+        await clear_session_preview();
+        reset_to_initial_state_local(); // чтобы сразу вернуть UI в исходное перед выбором
 
         const res = await chrome.runtime.sendMessage({ type: 'START_SELECTION' });
         if (!res || !res.ok) {
@@ -94,6 +94,19 @@
 
     btn_extract.addEventListener('click', () => {
       console.log('[sidepanel] Start Extract (TODO: send to API)');
+    });
+
+    // CLEAR: полный reset в исходное состояние
+    btn_clear.addEventListener('click', async () => {
+      clear_error();
+      btn_clear.disabled = true;
+
+      try {
+        await clear_session_preview();
+        reset_to_initial_state_local();
+      } finally {
+        btn_clear.disabled = false;
+      }
     });
   }
 
@@ -137,53 +150,70 @@
       return;
     }
 
-    // При загрузке файла — локальный preview, session-preview не нужен
-    chrome.runtime.sendMessage({ type: 'CLEAR_SESSION_PREVIEW' }).catch(() => {});
-    clear_preview_local_only();
+    // при загрузке файла: очищаем session preview, сбрасываем локально
+    clear_session_preview().catch(() => {});
+    reset_to_initial_state_local();
 
     if (is_pdf) {
       state.has_preview = true;
       state.preview_type = 'pdf';
       state.preview_url = null;
-      render();
       file_input.value = '';
+      render();
       return;
     }
 
-    // image preview via blob url
     state.has_preview = true;
     state.preview_type = 'image';
     state.preview_url = URL.createObjectURL(file);
-    render();
-
     file_input.value = '';
+    render();
   }
 
   function set_image_preview(data_url) {
-    // data_url = data:image/png;base64,...
-    clear_preview_local_only();
+    reset_to_initial_state_local();
     state.has_preview = true;
     state.preview_type = 'image';
-    state.preview_url = data_url;
+    state.preview_url = data_url; // data:image/png;base64,...
   }
 
-  function clear_preview_local_only() {
+  function reset_to_initial_state_local() {
     // revoke blob url if used
     if (state.preview_type === 'image' && state.preview_url && String(state.preview_url).startsWith('blob:')) {
       try { URL.revokeObjectURL(state.preview_url); } catch (_) {}
     }
+
     state.has_preview = false;
     state.preview_type = null;
     state.preview_url = null;
+
+    // очистить <input type=file> чтобы можно было выбрать тот же файл снова
+    file_input.value = '';
+
+    // очистить src у картинки (чтобы не мигало на старом)
+    preview_img.removeAttribute('src');
+
+    clear_error();
+    render();
+  }
+
+  async function clear_session_preview() {
+    try {
+      await chrome.storage.session.remove(['preview_type', 'preview_data_url']);
+    } catch (_) {}
+
+    try {
+      await chrome.runtime.sendMessage({ type: 'CLEAR_SESSION_PREVIEW' });
+    } catch (_) {}
   }
 
   function render() {
     if (state.has_preview) {
       btn_select.classList.add('hidden');
-      btn_extract.classList.remove('hidden');
+      extract_block.classList.remove('hidden');
     } else {
       btn_select.classList.remove('hidden');
-      btn_extract.classList.add('hidden');
+      extract_block.classList.add('hidden');
     }
 
     if (!state.has_preview) {

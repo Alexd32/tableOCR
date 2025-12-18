@@ -13,7 +13,7 @@ html, body{
   padding: 0;
   width: 100%;
   height: 100%;
-  overflow-x: hidden; /* главное, чтобы ничего не вылезало вправо */
+  overflow-x: hidden;
   font-family: Arial, sans-serif;
   background: #fff;
   color: var(--text);
@@ -141,6 +141,13 @@ html, body{
   margin-top: 14px;
 }
 
+.extract_block{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Основная кнопка */
 .btn{
   width: 100%;
   border: 0;
@@ -157,6 +164,32 @@ html, body{
 }
 
 .btn_primary:disabled{
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Кнопка-строка (Clear) */
+.btn_link{
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  cursor: pointer;
+
+  color: var(--blue);
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+
+  line-height: 1.2;
+}
+
+.btn_link:hover{
+  text-decoration: underline;
+}
+
+.btn_link:disabled{
   opacity: 0.6;
   cursor: not-allowed;
 }
