@@ -14,13 +14,15 @@
 
   let is_cleaning_up = false;
 
+  // scroll freeze
+  let saved_scroll_y = 0;
+  let saved_scroll_x = 0;
+  let old_body_style = null;
+
   begin();
 
   function begin() {
-    document.documentElement.dataset.tableOcrOldOverflow = document.documentElement.style.overflow || '';
-    document.body.dataset.tableOcrOldOverflow = document.body.style.overflow || '';
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
+    freeze_scroll();
 
     overlay = document.createElement('div');
     overlay.id = 'table_ocr_overlay';
@@ -52,7 +54,7 @@
 
     document.addEventListener('keydown', on_key, true);
 
-    // слушаем принудительную команду очистки (например Esc был в iframe)
+    // слушаем принудительную команду очистки (например Esc был в iframe или sidepanel закрыли)
     chrome.runtime.onMessage.addListener(on_runtime_message);
 
     update_rect(0, 0, 0, 0);
@@ -164,6 +166,43 @@
     m_bottom.style.height = `${Math.max(0, vh - (top + height))}px`;
   }
 
+  function freeze_scroll() {
+    // сохраняем текущую позицию
+    saved_scroll_x = window.scrollX || 0;
+    saved_scroll_y = window.scrollY || 0;
+
+    // сохраняем старые inline-стили body (важно: сайты часто задают их)
+    old_body_style = {
+      position: document.body.style.position || '',
+      top: document.body.style.top || '',
+      left: document.body.style.left || '',
+      right: document.body.style.right || '',
+      width: document.body.style.width || ''
+    };
+
+    // фиксируем body на месте, не меняя визуальную область
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${saved_scroll_y}px`;
+    document.body.style.left = `-${saved_scroll_x}px`;
+    document.body.style.right = '0';
+    document.body.style.width = '100%';
+  }
+
+  function unfreeze_scroll() {
+    if (!old_body_style) return;
+
+    document.body.style.position = old_body_style.position;
+    document.body.style.top = old_body_style.top;
+    document.body.style.left = old_body_style.left;
+    document.body.style.right = old_body_style.right;
+    document.body.style.width = old_body_style.width;
+
+    // возвращаем скролл туда, где был (после снятия fixed)
+    try {
+      window.scrollTo(saved_scroll_x, saved_scroll_y);
+    } catch (_) {}
+  }
+
   function cleanup() {
     if (is_cleaning_up) return;
     is_cleaning_up = true;
@@ -188,15 +227,6 @@
     hint = null;
     m_top = m_left = m_right = m_bottom = null;
 
-    try {
-      if (document.documentElement.dataset.tableOcrOldOverflow !== undefined) {
-        document.documentElement.style.overflow = document.documentElement.dataset.tableOcrOldOverflow;
-        delete document.documentElement.dataset.tableOcrOldOverflow;
-      }
-      if (document.body.dataset.tableOcrOldOverflow !== undefined) {
-        document.body.style.overflow = document.body.dataset.tableOcrOldOverflow;
-        delete document.body.dataset.tableOcrOldOverflow;
-      }
-    } catch (_) {}
+    unfreeze_scroll();
   }
 })();
